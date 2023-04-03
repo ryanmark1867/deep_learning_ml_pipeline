@@ -60,24 +60,17 @@ import os
 import yaml
 import math
 import argparse
- 
-print("tensorflow version is: ",tf.__version__)
+import os
+import logging
+import argparse
+from google.cloud import storage
+
+logging.getLogger().setLevel(logging.INFO)
+logging.info("tensorflow version is: ",tf.__version__)
 
 # load config file
 current_path = os.getcwd()
-print("current directory is: "+current_path)
-
-# load config file
-path_to_yaml = os.path.join(current_path, 'model_training_config.yml')
-print("path_to_yaml "+path_to_yaml)
-try:
-    with open (path_to_yaml, 'r') as c_file:
-        config_raw = yaml.safe_load(c_file)
-except Exception as e:
-    print('Error reading the config file')
-
-# test round trip
-
+logging.info("current directory is: "+current_path)
 # function to translate from yaml to argparser
 def create_argparser_from_yaml(yaml_data):
     parser = argparse.ArgumentParser()
@@ -91,16 +84,53 @@ def create_argparser_from_yaml(yaml_data):
             parser.add_argument(f'--{key}', dest=key, type=arg_type, default=value)
     
     return parser
+logging.info("ABOUT TO argparse")
+parser = argparse.ArgumentParser()
+parser.add_argument(
+        '--config_bucket',
+        help='Config details',
+        required=True
+    )
+args = parser.parse_args().__dict__
+logging.info("DICT argparse")
+config_bucket = args['config_bucket']
+logging.info("config_bucket is: ",config_bucket)
+# use the method described here to get parts of URI https://engineeringfordatascience.com/posts/how_to_extract_bucket_and_filename_info_from_gcs_uri/
+bucket_name = config_bucket.split("/")[2]
+object_name = "/".join(config_bucket.split("/")[3:])
+# read the object https://cloud.google.com/appengine/docs/legacy/standard/python/googlecloudstorageclient/read-write-to-cloud-storage
+storage_client = storage.Client()
+bucket = storage_client.bucket(bucket_name)
+blob = bucket.blob(object_name)
+with blob.open("r") as f:
+    config = yaml.safe_load(f)
+logging.info("config is: ",config)
 
-#yaml_file_path = 'model_training_config.yml'
-#yaml_data = load_yaml(yaml_file_path)
-# convert yaml to argparser
-parser = create_argparser_from_yaml(config_raw)
-args = parser.parse_args()
-print(args)
-# convert back to local dictionary
-config = vars(args)
-print("config is: ",config)
+'''
+CSV_COLUMNS = (
+    'ontime,dep_delay,taxi_out,distance,origin,dest,dep_hour,is_weekday,carrier,' +
+    'dep_airport_lat,dep_airport_lon,arr_airport_lat,arr_airport_lon,data_split'
+).split(',')
+'''
+
+# convert datasets to Pandas dataframes
+def read_dataset(pattern):
+    dataset = tf.data.experimental.make_csv_dataset(
+        pattern, batch_size,
+        column_names=CSV_COLUMNS,
+        column_defaults=CSV_COLUMN_TYPES,
+        sloppy=True,
+        num_parallel_reads=2,
+        ignore_errors=True,
+        num_epochs=1)
+    dataset = dataset.map(features_and_labels)
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        dataset = dataset.shuffle(batch_size * 10)
+        dataset = dataset.repeat()
+    dataset = dataset.prefetch(1)
+    if truncate is not None:
+        dataset = dataset.take(truncate)
+    return dataset
 
 # load parameters
 
@@ -305,72 +335,76 @@ def set_experiment_parameters(experiment_number, count_no_delay, count_delay):
 
 """
 
-def ingest_data(path):
+def assign_container_env_variables():
+    """
+    docstring
+    """
+    # The Vertex AI contract. If not running in Vertex AI Training, these will be None
+    OUTPUT_MODEL_DIR = os.getenv("AIP_MODEL_DIR")  # or None
+    TRAIN_DATA_PATTERN = os.getenv("AIP_TRAINING_DATA_URI")
+    EVAL_DATA_PATTERN = os.getenv("AIP_VALIDATION_DATA_URI")
+    TEST_DATA_PATTERN = os.getenv("AIP_TEST_DATA_URI")
+    logging.info("patterns train: ",TRAIN_DATA_PATTERN)
+    logging.info("patterns val: ",EVAL_DATA_PATTERN)
+    logging.info("patterns test: ",TEST_DATA_PATTERN)
+    return OUTPUT_MODEL_DIR, TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN
+
+def ingest_data(path,target_col):
     '''load list of valid routes and directions into dataframe
     Args:
         path: path for data files
     
     Returns:
-        merged_data: dataframe loaded from pickle file
+        merged_data: dataframe loaded from patterns
     '''
-    file_name = os.path.join(path,config['file_names']['csv_filename'])
-    merged_data = pd.read_csv(file_name)
-    merged_data.head()
+    merged_data = pd.read_csv(path)
+    merged_data.columns = merged_data.columns.str.replace(' ', '_')
+    merged_data.columns  = merged_data.columns.str.lower()
+    target_col = target_col.lower()
+    merged_data['target'] = np.where(merged_data[target_col] >= merged_data[target_col].median(), 1, 0 )
     return(merged_data)
 
-def prep_merged_data(merged_data,target_col):
-    '''add derived columns to merged_data dataframe
-    Args:
-        merged_data: input dataframe
-        target_col: column that is the target
-    
-    Returns:
-        merged_data: dataframe with derived columns added
-    '''
-    if targetcontinuous:
-        merged_data['target'] = merged_data[target_col]
-    else:
-        print("target column is: ",target_col)
-        print("median of target is: ",merged_data[target_col].median())
-        merged_data['target'] = np.where(merged_data[target_col] >= merged_data[target_col].median(), 1, 0 )
-    return(merged_data)
+
 
 """## Control cell for ingesting cleaned up dataset"""
 
 # control cell for ingesting data
 
+OUTPUT_MODEL_DIR, TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN = assign_container_env_variables()
 path = get_path()
 print("path is",path)
-# load route direction and delay data datframes
-merged_data = ingest_data(path)
-merged_data = prep_merged_data(merged_data,target_col)
+# get dataframes for each slice of data
+train = ingest_data(TRAIN_DATA_PATTERN,target_col)
+val = ingest_data(EVAL_DATA_PATTERN,target_col)
+test = ingest_data(TEST_DATA_PATTERN,target_col)
+#merged_data = ingest_data(path)
+#merged_data = prep_merged_data(merged_data,target_col)
 # remove spaces from and lowercase column names (to avoid model saving issues)
-merged_data.columns = merged_data.columns.str.replace(' ', '_')
-merged_data.columns  = merged_data.columns.str.lower()
+
 config['categorical'] = [x.replace(" ", "_") for x in config['categorical']]
 config['continuous'] = [x.replace(" ", "_") for x in config['continuous']]
 config['categorical'] = [x.lower() for x in config['categorical']]
 config['continuous'] = [x.lower() for x in config['continuous']]
 
-print("shape of pre refactored dataset", merged_data.shape)
-print("zero count ",merged_data['target'].value_counts()[0])
-print("one count",merged_data['target'].value_counts()[1])
-print("shape of refactored dataset", merged_data.shape)
+logging.info("shape of pre refactored dataset", merged_data.shape)
+logging.info("zero count ",merged_data['target'].value_counts()[0])
+logging.info("one count",merged_data['target'].value_counts()[1])
+logging.info("shape of refactored dataset", merged_data.shape)
 count_no_delay = merged_data[merged_data['target']==0].shape[0]
 count_delay = merged_data[merged_data['target']==1].shape[0]
-print("count under median ",count_no_delay)
-print("count over median ",count_delay)
+logging.info("count under median ",count_no_delay)
+logging.info("count over median ",count_delay)
 # define parameters for the current experiment
 experiment_number = current_experiment
 early_stop, one_weight, epochs,es_monitor,es_mode = set_experiment_parameters(experiment_number, count_no_delay, count_delay)
-print("early_stop is ",config['general']['early_stop'])
-print("one_weight is ",one_weight)
-print("epochs is ",epochs)
-print("es_monitor is ",es_monitor)
-print("es_mode is ",es_mode)
+logging.info("early_stop is ",config['general']['early_stop'])
+logging.info("one_weight is ",one_weight)
+logging.info("epochs is ",epochs)
+logging.info("es_monitor is ",es_monitor)
+logging.info("es_mode is ",es_mode)
 dataframe = merged_data
 
-merged_data.head()
+
 
 """## Split the DataFrame into training, validation, and test sets
 
@@ -393,11 +427,11 @@ def get_train_validation_test(dataset):
     return(train,val,test)
 
 #train, val, test = np.split(dataframe.sample(frac=1), [int(0.8*len(dataframe)), int(0.9*len(dataframe))])
-train, val, test = get_train_validation_test(dataframe)
+#train, val, test = get_train_validation_test(dataframe)
 
-print(len(train), 'training examples')
-print(len(val), 'validation examples')
-print(len(test), 'test examples')
+logging.info(len(train), 'training examples')
+logging.info(len(val), 'validation examples')
+logging.info(len(test), 'test examples')
 
 """## Create an input pipeline using tf.data
 
@@ -417,7 +451,7 @@ def df_to_dataset(dataframe, shuffle=True, batch_size=32):
 
 """Use `df_to_dataset` to check the format of the data the input pipeline helper function returns by calling it on the training data, and use a small batch size to keep the output readable:"""
 
-train,val,test = get_train_validation_test(merged_data)
+#train,val,test = get_train_validation_test(merged_data)
 train_ds = df_to_dataset(train, batch_size=batch_size)
 
 [(train_features, label_batch)] = train_ds.take(1)
@@ -595,11 +629,11 @@ def set_early_stop(es_monitor, es_mode):
     callback_list = []
     es = EarlyStopping(monitor=es_monitor, mode=es_mode, verbose=1,patience = patience_threshold)
     callback_list.append(es)
-    model_path = get_model_path()
-    save_model_path = os.path.join(model_path,'scmodel'+modifier+"_"+str(experiment_number))
+    #model_path = get_model_path()
+    #save_model_path = os.path.join(model_path,'scmodel'+modifier+"_"+str(experiment_number))
     # define callback to save best model
-    mc = ModelCheckpoint(save_model_path, monitor=es_monitor, mode=es_mode, verbose=1, save_best_only=True, save_format='tf')
-    callback_list.append(mc)
+    #mc = ModelCheckpoint(save_model_path, monitor=es_monitor, mode=es_mode, verbose=1, save_best_only=True, save_format='tf')
+    #callback_list.append(mc)
     # define callback for TensorBoard
     if tensorboard_callback:
         tensorboard_log_dir = os.path.join(get_path(),"tensorboard_log",datetime.now().strftime("%Y%m%d-%H%M%S"))
@@ -620,8 +654,8 @@ def fit_model():
 fit_model()
 
 loss, accuracy = model.evaluate(test_ds)
-print("Test Loss", loss)
-print("Test Accuracy", accuracy)
+logging.info("Test Loss", loss)
+logging.info("Test Accuracy", accuracy)
 
 """## Use the trained model to get predictions on new data points
 
@@ -630,15 +664,16 @@ Now that the model has been trained, thanks to the Keras preprocessing layers, w
 We will [save and reload the Keras model](../keras/save_and_load.ipynb) with `Model.save` and `Model.load_model` before doing inference on new data:
 """
 
-model_file_name = os.path.join(get_model_path(),config['file_names']['saved_model'])
-model.save(model_file_name)
-reloaded_model = tf.keras.models.load_model(model_file_name)
+#model_file_name = os.path.join(get_model_path(),config['file_names']['saved_model'])
+#model.save(model_file_name)
+tf.saved_model.save(model, OUTPUT_MODEL_DIR)
+#reloaded_model = tf.keras.models.load_model(model_file_name)
 
-print("categorical columns: ",config['categorical'])
-print("continuous columns: ",config['continuous'])
+logging.info("categorical columns: ",config['categorical'])
+logging.info("continuous columns: ",config['continuous'])
 
 """Use the Keras `Model.predict` method to get predictions on a new data point. Use `tf.convert_to_tensor` on each feature to prepare it to be fed into the trained model to get a prediction."""
-
+'''
 sample = {
     'location': 'Sentul, Kuala Lumpur',
     'rooms': 3.0,
@@ -653,6 +688,7 @@ sample = {
 input_dict = {name: tf.convert_to_tensor([value]) for name, value in sample.items()}
 input_dict
 
+
 sample = {
     'location': 'Sentul, Kuala Lumpur',
     'rooms': 3.0,
@@ -665,7 +701,7 @@ sample = {
 }
 
 input_dict = {name: tf.convert_to_tensor([value]) for name, value in sample.items()}
-predictions = reloaded_model.predict(input_dict)
+#predictions = reloaded_model.predict(input_dict)
 prob = tf.nn.sigmoid(predictions[0])
 
 print(
@@ -678,8 +714,7 @@ print(
     "This property has a %.1f percent probability of "
     "having a price over the median." % (100 * prob2)
 )
-
-merged_data['price'].median()
+'''
 
 # print elapsed time to run the notebook
-print("--- %s seconds ---" % (time.time() - start_time))
+logging.info("--- %s seconds ---" % (time.time() - start_time))
