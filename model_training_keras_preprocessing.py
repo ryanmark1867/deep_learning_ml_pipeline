@@ -66,7 +66,7 @@ import argparse
 from google.cloud import storage
 
 logging.getLogger().setLevel(logging.INFO)
-logging.info("tensorflow version is: ",tf.__version__)
+logging.info("tensorflow version is: "+str(tf.__version__))
 
 # load config file
 current_path = os.getcwd()
@@ -94,7 +94,7 @@ parser.add_argument(
 args = parser.parse_args().__dict__
 logging.info("DICT argparse")
 config_bucket = args['config_bucket']
-logging.info("config_bucket is: ",config_bucket)
+logging.info("config_bucket is: "+str(config_bucket))
 # use the method described here to get parts of URI https://engineeringfordatascience.com/posts/how_to_extract_bucket_and_filename_info_from_gcs_uri/
 bucket_name = config_bucket.split("/")[2]
 object_name = "/".join(config_bucket.split("/")[3:])
@@ -104,7 +104,7 @@ bucket = storage_client.bucket(bucket_name)
 blob = bucket.blob(object_name)
 with blob.open("r") as f:
     config = yaml.safe_load(f)
-logging.info("config is: ",config)
+logging.info("config is: "+str(config))
 
 '''
 CSV_COLUMNS = (
@@ -141,7 +141,7 @@ if repeatable_run:
     seed(4)
     tf.random.set_seed(7)
 
-
+logging.info("ABOUT TO ASSIGN CONFIG")
 testproportion = config['test_parms']['testproportion'] # proportion of data reserved for test set
 trainproportion = config['test_parms']['trainproportion'] # proportion of non-test data dedicated to training (vs. validation)
 get_test_train_acc = config['test_parms']['get_test_train_acc']
@@ -204,7 +204,7 @@ collist = config['categorical']
 textcols = config['text']
 continuouscols = config['continuous']
 excludefromcolist = config['excluded']
-
+logging.info("THROUGH ASSIGN CONFIG")
 """## Helper functions"""
 
 # get the paths required
@@ -344,9 +344,9 @@ def assign_container_env_variables():
     TRAIN_DATA_PATTERN = os.getenv("AIP_TRAINING_DATA_URI")
     EVAL_DATA_PATTERN = os.getenv("AIP_VALIDATION_DATA_URI")
     TEST_DATA_PATTERN = os.getenv("AIP_TEST_DATA_URI")
-    logging.info("patterns train: ",TRAIN_DATA_PATTERN)
-    logging.info("patterns val: ",EVAL_DATA_PATTERN)
-    logging.info("patterns test: ",TEST_DATA_PATTERN)
+    logging.info("patterns train: "+str(TRAIN_DATA_PATTERN))
+    logging.info("patterns val: "+str(EVAL_DATA_PATTERN))
+    logging.info("patterns test: "+str(TEST_DATA_PATTERN))
     return OUTPUT_MODEL_DIR, TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN
 
 def ingest_data(path,target_col):
@@ -360,7 +360,7 @@ def ingest_data(path,target_col):
     merged_data = pd.read_csv(path)
     merged_data.columns = merged_data.columns.str.replace(' ', '_')
     merged_data.columns  = merged_data.columns.str.lower()
-    target_col = target_col.lower()
+    logging.info("in ingest_data")
     merged_data['target'] = np.where(merged_data[target_col] >= merged_data[target_col].median(), 1, 0 )
     return(merged_data)
 
@@ -369,40 +369,46 @@ def ingest_data(path,target_col):
 """## Control cell for ingesting cleaned up dataset"""
 
 # control cell for ingesting data
-
+logging.info("ABOUT TO GET ENV VARIABLES")
 OUTPUT_MODEL_DIR, TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN = assign_container_env_variables()
-path = get_path()
-print("path is",path)
+#path = get_path()
+#logging.info("path is",path)
 # get dataframes for each slice of data
+target_col = target_col.lower()
+logging.info("target_col is: "+target_col)
 train = ingest_data(TRAIN_DATA_PATTERN,target_col)
 val = ingest_data(EVAL_DATA_PATTERN,target_col)
 test = ingest_data(TEST_DATA_PATTERN,target_col)
+logging.info("ASSIGNED train val test")
 #merged_data = ingest_data(path)
 #merged_data = prep_merged_data(merged_data,target_col)
 # remove spaces from and lowercase column names (to avoid model saving issues)
-
+t_shape = train.shape
+logging.info("train shape "+str(t_shape))
+logging.info("PAST train shape")
+v_shape = val.shape
+logging.info("val shape "+str(v_shape))
+logging.info("PAST val shape")
+te_shape = test.shape
+logging.info("test shape "+str(te_shape))
+logging.info("PAST test shape")
 config['categorical'] = [x.replace(" ", "_") for x in config['categorical']]
 config['continuous'] = [x.replace(" ", "_") for x in config['continuous']]
 config['categorical'] = [x.lower() for x in config['categorical']]
 config['continuous'] = [x.lower() for x in config['continuous']]
-
-logging.info("shape of pre refactored dataset", merged_data.shape)
-logging.info("zero count ",merged_data['target'].value_counts()[0])
-logging.info("one count",merged_data['target'].value_counts()[1])
-logging.info("shape of refactored dataset", merged_data.shape)
-count_no_delay = merged_data[merged_data['target']==0].shape[0]
-count_delay = merged_data[merged_data['target']==1].shape[0]
-logging.info("count under median ",count_no_delay)
-logging.info("count over median ",count_delay)
+logging.info("PAST col fixup")
+count_no_delay = train[train['target']==0].shape[0]
+count_delay = train[train['target']==1].shape[0]
+logging.info("PAST count delay")
 # define parameters for the current experiment
 experiment_number = current_experiment
 early_stop, one_weight, epochs,es_monitor,es_mode = set_experiment_parameters(experiment_number, count_no_delay, count_delay)
-logging.info("early_stop is ",config['general']['early_stop'])
-logging.info("one_weight is ",one_weight)
-logging.info("epochs is ",epochs)
-logging.info("es_monitor is ",es_monitor)
-logging.info("es_mode is ",es_mode)
-dataframe = merged_data
+#logging.info("early_stop is "+config['general']['early_stop'])
+logging.info("one_weight is "+str(one_weight))
+logging.info("epochs is "+str(epochs))
+logging.info("es_monitor is "+str(es_monitor))
+logging.info("es_mode is "+str(es_mode))
+
 
 
 
@@ -429,9 +435,9 @@ def get_train_validation_test(dataset):
 #train, val, test = np.split(dataframe.sample(frac=1), [int(0.8*len(dataframe)), int(0.9*len(dataframe))])
 #train, val, test = get_train_validation_test(dataframe)
 
-logging.info(len(train), 'training examples')
-logging.info(len(val), 'validation examples')
-logging.info(len(test), 'test examples')
+logging.info(str(len(train))+'training examples')
+logging.info(str(len(val))+'validation examples')
+logging.info(str(len(test))+'test examples')
 
 """## Create an input pipeline using tf.data
 
@@ -639,14 +645,14 @@ def set_early_stop(es_monitor, es_mode):
         tensorboard_log_dir = os.path.join(get_path(),"tensorboard_log",datetime.now().strftime("%Y%m%d-%H%M%S"))
         tensorboard = TensorBoard(log_dir= tensorboard_log_dir)
         callback_list.append(tensorboard)
-    return(callback_list,save_model_path)
+    return(callback_list)
 
 """Train the model"""
 
 @tf.autograph.experimental.do_not_convert
 def fit_model():
     if config['general']['early_stop']:
-       callback_list, save_model_path = set_early_stop(es_monitor, es_mode)
+       callback_list = set_early_stop(es_monitor, es_mode)
        model.fit(train_ds, epochs=config['hyperparameters']['epochs'], validation_data=val_ds,callbacks=callback_list)
     else:
        model.fit(train_ds, epochs=config['hyperparameters']['epochs'], validation_data=val_ds)
@@ -654,8 +660,8 @@ def fit_model():
 fit_model()
 
 loss, accuracy = model.evaluate(test_ds)
-logging.info("Test Loss", loss)
-logging.info("Test Accuracy", accuracy)
+logging.info("Test Loss"+str(loss))
+logging.info("Test Accuracy"+str(accuracy))
 
 """## Use the trained model to get predictions on new data points
 
@@ -669,8 +675,8 @@ We will [save and reload the Keras model](../keras/save_and_load.ipynb) with `Mo
 tf.saved_model.save(model, OUTPUT_MODEL_DIR)
 #reloaded_model = tf.keras.models.load_model(model_file_name)
 
-logging.info("categorical columns: ",config['categorical'])
-logging.info("continuous columns: ",config['continuous'])
+logging.info("categorical columns: "+str(config['categorical']))
+logging.info("continuous columns: "+str(config['continuous']))
 
 """Use the Keras `Model.predict` method to get predictions on a new data point. Use `tf.convert_to_tensor` on each feature to prepare it to be fed into the trained model to get a prediction."""
 '''
@@ -717,4 +723,4 @@ print(
 '''
 
 # print elapsed time to run the notebook
-logging.info("--- %s seconds ---" % (time.time() - start_time))
+#logging.info("--- %s seconds ---" % (time.time() - start_time))
