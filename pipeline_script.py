@@ -5,19 +5,21 @@ print("just after tf import")
 import argparse
 import yaml
 import os
+from datetime import datetime
 
 current_path = os.getcwd()
 print("current directory is: "+current_path)
-
+TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
+ENDPOINT_NAME = 'klrealestate'
 # adapted from https://github.com/GoogleCloudPlatform/data-science-on-gcp/blob/edition2/10_mlops/train_on_vertexai.py
 tf_version = '2-' + tf.__version__[2:3]
 train_image = "us-docker.pkg.dev/vertex-ai/training/tf-cpu.{}:latest".format(tf_version)
 # us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-9:latest
 deploy_image = "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.{}:latest".format(tf_version)
-model_display_name = "kuala Lumpur real estate prediction"
+#model_display_name = "kuala Lumpur real estate prediction"
 # assumes that config file is in same directory as this script
 config_file_path = "model_training_config.yml"
-config_bucket_path = "gs://second-project-ml-tabular-bucket/training_scripts/model_training_config.yml"
+config_bucket_path = "gs://third-project-ml-tabular-bucket/training_scripts/model_training_config.yml"
 script_path = "model_training_keras_preprocessing.py"
 #script_path = "test.py"
 machine_type = 'n1-standard-4'
@@ -34,12 +36,13 @@ staging_path = "gs://second-project-ml-tabular-bucket/staging/"
 print("dataset_path is: ",dataset_path)
 # define CustomTrainingJob object
 def create_job():
+    model_display_name = '{}-{}'.format(ENDPOINT_NAME, TIMESTAMP)
     job = aiplatform.CustomTrainingJob(
             display_name='train-{}'.format(model_display_name),
             script_path = script_path,
             container_uri=train_image,
             staging_bucket = staging_path,
-            requirements=['pandas'],  # any extra Python packages
+            requirements=['gcsfs'],  # any extra Python packages
             model_serving_container_image_uri=deploy_image
     ) 
     # define dataset
@@ -48,13 +51,14 @@ def create_job():
 
 # run job to create dataset
 def run_job(ds, model_args):
+    model_display_name = '{}-{}'.format(ENDPOINT_NAME, TIMESTAMP)
     model = job.run(
         dataset=ds,
         # See https://googleapis.dev/python/aiplatform/latest/aiplatform.html#
         training_fraction_split = 0.8,
         validation_fraction_split = 0.1,
         test_fraction_split=0.1,
-        model_display_name="test pipeline",
+        model_display_name=model_display_name,
         args=model_args,
     #    replica_count=1,
         machine_type= machine_type

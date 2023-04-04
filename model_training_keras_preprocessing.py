@@ -99,11 +99,30 @@ logging.info("config_bucket is: "+str(config_bucket))
 bucket_name = config_bucket.split("/")[2]
 object_name = "/".join(config_bucket.split("/")[3:])
 # read the object https://cloud.google.com/appengine/docs/legacy/standard/python/googlecloudstorageclient/read-write-to-cloud-storage
-storage_client = storage.Client()
-bucket = storage_client.bucket(bucket_name)
-blob = bucket.blob(object_name)
-with blob.open("r") as f:
-    config = yaml.safe_load(f)
+storage_client2 = storage.Client()
+bucket = storage_client2.bucket(bucket_name)
+blob_out = bucket.blob(object_name)
+destination_file_name = 'config.yml'
+logging.info("bucket_name is: "+str(bucket_name))
+logging.info("object_name is: "+str(object_name))
+#stringer = blob_out.download_as_string()
+#logging.info("stringer is: "+str(stringer))
+logging.info("destination_file_name is: "+str(destination_file_name))
+blob_out.download_to_filename(destination_file_name)
+try:
+    with open (destination_file_name, 'r') as c_file:
+        config = yaml.safe_load(c_file)
+except Exception as e:
+    print('Error reading the config file')
+#logging.info("blob is: "+str(blob))
+'''
+try:
+    with blob_out.open("r") as f:
+        config = yaml.safe_load(f)
+except Exception as e:
+    logging.info("Exception is: "+str(e))
+'''
+
 logging.info("config is: "+str(config))
 
 '''
@@ -357,10 +376,12 @@ def ingest_data(path,target_col):
     Returns:
         merged_data: dataframe loaded from patterns
     '''
+    logging.info("in ingest_data for"+str(path))
+    logging.info("target_col is: "+str(target_col))
     merged_data = pd.read_csv(path)
     merged_data.columns = merged_data.columns.str.replace(' ', '_')
     merged_data.columns  = merged_data.columns.str.lower()
-    logging.info("in ingest_data")
+    
     merged_data['target'] = np.where(merged_data[target_col] >= merged_data[target_col].median(), 1, 0 )
     return(merged_data)
 
