@@ -1,11 +1,13 @@
+# script to drive training process for a Keras model trained on tabular data in Vertex AI
+
+# imports
 from google.cloud import aiplatform
-print("just before tf import")
 import tensorflow as tf
-print("just after tf import")
 import argparse
 import yaml
 import os
 from datetime import datetime
+
 
 current_path = os.getcwd()
 print("current directory is: "+current_path)
@@ -14,25 +16,19 @@ ENDPOINT_NAME = 'klrealestate'
 # adapted from https://github.com/GoogleCloudPlatform/data-science-on-gcp/blob/edition2/10_mlops/train_on_vertexai.py
 # this fails because it assumes a single digit second level for tf level, so you get back to 2.1 instead of 2.11
 tf_version = '2-' + tf.__version__[2:3]
-#train_image = "us-docker.pkg.dev/vertex-ai/training/tf-cpu.{}:latest".format(tf_version)
+# for simplicity's sake, hardcode images that match the images used training in Colab
 train_image = "us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-9:latest"
-# us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-9:latest
-#deploy_image = "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.{}:latest".format(tf_version)
 deploy_image = "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-9:latest"
 print("train_image is: ",train_image)
 print("deploy_image is: ",deploy_image)
 print("tf.__version__ is:",str(tf.__version__))
-#model_display_name = "kuala Lumpur real estate prediction"
 # assumes that config file is in same directory as this script
 config_file_path = "model_training_config.yml"
 config_bucket_path = "gs://third-project-ml-tabular-bucket/training_scripts/model_training_config.yml"
 script_path = "model_training_keras_preprocessing.py"
-#script_path = "test.py"
 machine_type = 'n1-standard-4'
 
-# RuntimeError: staging_bucket should be set in TrainingJob constructor 
-# or set using aiplatform.init(staging_bucket='gs://my-bucket')
-# define dataset object using parms from dataset defined in Vertex AI UI
+
 project_id = 'first-project-ml-tabular'
 region = 'us-central1'
 dataset_id = '2901415472631119872'
@@ -101,14 +97,12 @@ if __name__ == '__main__':
     config_dict = load_yaml(config_file_path)
     parser = create_argparser_from_yaml(config_dict)
     # list(inputDictionary.items())
+    # all the arguments sent to the training script run in the container are sent via
+    # a yaml file in Cloud Storage whose URI is the single argument sent
     model_args = ['--config_bucket', config_bucket_path]
- #   model_args_dict = parser.parse_args().__dict__
- #   model_args = list(model_args_dict.items())
     print("model_args: ",model_args)
     job = create_job()
-    print("job created")
     ds = aiplatform.TabularDataset(dataset_path)
-    print("ds created")
     print("model_args: ",model_args)
     model = run_job(ds, model_args)
 
