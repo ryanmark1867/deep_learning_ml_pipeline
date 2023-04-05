@@ -12,10 +12,16 @@ print("current directory is: "+current_path)
 TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
 ENDPOINT_NAME = 'klrealestate'
 # adapted from https://github.com/GoogleCloudPlatform/data-science-on-gcp/blob/edition2/10_mlops/train_on_vertexai.py
+# this fails because it assumes a single digit second level for tf level, so you get back to 2.1 instead of 2.11
 tf_version = '2-' + tf.__version__[2:3]
-train_image = "us-docker.pkg.dev/vertex-ai/training/tf-cpu.{}:latest".format(tf_version)
+#train_image = "us-docker.pkg.dev/vertex-ai/training/tf-cpu.{}:latest".format(tf_version)
+train_image = "us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-9:latest"
 # us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-9:latest
-deploy_image = "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.{}:latest".format(tf_version)
+#deploy_image = "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.{}:latest".format(tf_version)
+deploy_image = "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-9:latest"
+print("train_image is: ",train_image)
+print("deploy_image is: ",deploy_image)
+print("tf.__version__ is:",str(tf.__version__))
 #model_display_name = "kuala Lumpur real estate prediction"
 # assumes that config file is in same directory as this script
 config_file_path = "model_training_config.yml"

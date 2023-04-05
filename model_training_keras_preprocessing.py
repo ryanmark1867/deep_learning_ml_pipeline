@@ -64,6 +64,7 @@ import os
 import logging
 import argparse
 from google.cloud import storage
+import fnmatch
 
 logging.getLogger().setLevel(logging.INFO)
 logging.info("tensorflow version is: "+str(tf.__version__))
@@ -368,7 +369,7 @@ def assign_container_env_variables():
     logging.info("patterns test: "+str(TEST_DATA_PATTERN))
     return OUTPUT_MODEL_DIR, TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN
 
-def ingest_data(path,target_col):
+def ingest_data(tracer_pattern,target_col):
     '''load list of valid routes and directions into dataframe
     Args:
         path: path for data files
@@ -376,9 +377,22 @@ def ingest_data(path,target_col):
     Returns:
         merged_data: dataframe loaded from patterns
     '''
-    logging.info("in ingest_data for"+str(path))
+    logging.info("in ingest_data for"+str(tracer_pattern))
     logging.info("target_col is: "+str(target_col))
-    merged_data = pd.read_csv(path)
+
+    # use the pattern to find all the bucket files and create a df from it
+    bucket_pattern = tracer_pattern.split("/")[2]
+    pattern = "/".join(tracer_pattern.split("/")[3:])
+    pattern_client = storage.Client()
+    bucket = pattern_client.get_bucket(bucket_pattern)
+    # get all the blobs in the bucket
+    blobs = bucket.list_blobs()
+    # get the URIs for all the matching files
+    matching_files = [f"gs://{bucket_pattern}/{blob.name}" for blob in blobs if fnmatch.fnmatch(blob.name, pattern)]
+    logging.info("matching_files is: "+str(matching_files))
+    # build a dataframe from all the matching files
+    merged_data = pd.concat([pd.read_csv(f) for f in matching_files], ignore_index=True)
+    logging.info(" merged_data shape: "+str(merged_data.shape))
     merged_data.columns = merged_data.columns.str.replace(' ', '_')
     merged_data.columns  = merged_data.columns.str.lower()
     
