@@ -1,9 +1,9 @@
 
 ENDPOINT_NAME : 'klrealestate'
 # from https://cloud.google.com/vertex-ai/docs/training/pre-built-containers
-train_image : "us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-9:latest"
+train_image : "us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-11:latest"
 # from https://cloud.google.com/vertex-ai/docs/predictions/pre-built-containers
-deploy_image : "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-9:latest"
+deploy_image : "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-11:latest"
 config_file_path : "model_training_config.yml"
 # Google Cloud Storage file containing the config settings for the training script
 

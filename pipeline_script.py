@@ -1,4 +1,5 @@
 # script to drive training process for a Keras model trained on tabular data in Vertex AI
+# adapts ideas from https://github.com/GoogleCloudPlatform/data-science-on-gcp/blob/edition2/10_mlops/train_on_vertexai.py
 
 # imports
 from google.cloud import aiplatform
@@ -10,6 +11,7 @@ from datetime import datetime
 
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
+
 
 
 
