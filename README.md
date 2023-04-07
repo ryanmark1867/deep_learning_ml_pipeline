@@ -12,4 +12,5 @@ File descriptions
 Here are the articles that describe the deployments in more detail:
 
 - TBD: here
+- [Developing and Deploying a Machine Learning Model on Vertex AI using Python](https://towardsdatascience.com/developing-and-deploying-a-machine-learning-model-on-vertex-ai-using-python-865b535814f8) - ideas from this article and the accompanying repo were used in this code in this repo.
 
