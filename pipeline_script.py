@@ -41,7 +41,7 @@ def create_job(config):
 
 
 # run job to create dataset
-def run_job(ds, model_args,config):
+def run_job(job, ds, model_args,config):
     model_display_name = '{}-{}'.format(config['ENDPOINT_NAME'], TIMESTAMP)
     model = job.run(
         dataset=ds,
@@ -71,6 +71,6 @@ if __name__ == '__main__':
     job = create_job(config)
     dataset_path = 'projects/'+config['project_id']+'/locations/'+config['region']+'/datasets/'+config['dataset_id']
     ds = aiplatform.TabularDataset(dataset_path)
-    model = run_job(ds, model_args,config)
+    model = run_job(job, ds, model_args,config)
 
 

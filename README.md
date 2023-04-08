@@ -11,6 +11,6 @@ File descriptions
 
 Here are the articles that describe the deployments in more detail:
 
-- TBD: here
+- [Training models in Vertex AI containers](https://markryan-69718.medium.com/training-a-custom-model-in-a-pre-built-vertex-ai-container-8a34e244db53?sk=5486fc72b783977e03f8215339d58596) - this article provides an overview of how to use the code in this repo to set up training of a custom model in a Vertex AI pre-built container.
 - [Developing and Deploying a Machine Learning Model on Vertex AI using Python](https://towardsdatascience.com/developing-and-deploying-a-machine-learning-model-on-vertex-ai-using-python-865b535814f8) - ideas from this article and the accompanying repo were used in this code in this repo.
 
