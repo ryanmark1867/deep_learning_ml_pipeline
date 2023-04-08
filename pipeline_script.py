@@ -60,6 +60,32 @@ def run_job(job, ds, model_args,config):
     )
     return model
 
+def deploy_model(model,config):
+    endpoints = aiplatform.Endpoint.list(
+        filter='display_name="{}"'.format(config['ENDPOINT_NAME']),
+        order_by='create_time desc',
+        project=config['project_id'], 
+        location=config['region']
+    )
+    if len(endpoints) > 0:
+        endpoint = endpoints[0]  # most recently created
+    else:
+        endpoint = aiplatform.Endpoint.create(
+            display_name=config['ENDPOINT_NAME'], 
+            project=config['project_id'], 
+            location=config['region']
+ #           sync=DEVELOP_MODE
+        )
+
+    # deploy
+    model.deploy(
+        endpoint=endpoint,
+        traffic_split={"0": 100},
+        machine_type=config['machine_type_deploy'],
+        min_replica_count=1,
+        max_replica_count=1,
+#        sync=DEVELOP_MODE
+    )
 
 if __name__ == '__main__':
     # load pipeline config parameters
@@ -72,5 +98,9 @@ if __name__ == '__main__':
     dataset_path = 'projects/'+config['project_id']+'/locations/'+config['region']+'/datasets/'+config['dataset_id']
     ds = aiplatform.TabularDataset(dataset_path)
     model = run_job(job, ds, model_args,config)
+    print("deployment starting")
+    if config['deploy_model']:
+        deploy_model(model,config)
+    print("pipeline completed")
 
 
