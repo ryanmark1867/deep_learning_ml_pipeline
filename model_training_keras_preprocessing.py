@@ -70,7 +70,9 @@ def create_argparser_from_yaml(yaml_data):
     
     return parser
 logging.info("ABOUT TO argparse")
+# get the arguments passed from the pipeline script
 parser = argparse.ArgumentParser()
+# there is a single argument - the URI of the config yaml file that contains the training parameters
 parser.add_argument(
         '--config_bucket',
         help='Config details',
@@ -85,56 +87,25 @@ bucket_name = config_bucket.split("/")[2]
 object_name = "/".join(config_bucket.split("/")[3:])
 # read the object https://cloud.google.com/appengine/docs/legacy/standard/python/googlecloudstorageclient/read-write-to-cloud-storage
 storage_client2 = storage.Client()
+# get objects for the bucket name and file path within the bucket
 bucket = storage_client2.bucket(bucket_name)
 blob_out = bucket.blob(object_name)
+# define the name for the file in the container file system
 destination_file_name = 'config.yml'
 logging.info("bucket_name is: "+str(bucket_name))
 logging.info("object_name is: "+str(object_name))
-#stringer = blob_out.download_as_string()
-#logging.info("stringer is: "+str(stringer))
 logging.info("destination_file_name is: "+str(destination_file_name))
+# download the config file to a file in the container
 blob_out.download_to_filename(destination_file_name)
+# load the config file into the dictionary config
 try:
     with open (destination_file_name, 'r') as c_file:
         config = yaml.safe_load(c_file)
 except Exception as e:
     print('Error reading the config file')
-#logging.info("blob is: "+str(blob))
-'''
-try:
-    with blob_out.open("r") as f:
-        config = yaml.safe_load(f)
-except Exception as e:
-    logging.info("Exception is: "+str(e))
-'''
+
 
 logging.info("config is: "+str(config))
-
-'''
-CSV_COLUMNS = (
-    'ontime,dep_delay,taxi_out,distance,origin,dest,dep_hour,is_weekday,carrier,' +
-    'dep_airport_lat,dep_airport_lon,arr_airport_lat,arr_airport_lon,data_split'
-).split(',')
-'''
-
-# convert datasets to Pandas dataframes
-def read_dataset(pattern):
-    dataset = tf.data.experimental.make_csv_dataset(
-        pattern, batch_size,
-        column_names=CSV_COLUMNS,
-        column_defaults=CSV_COLUMN_TYPES,
-        sloppy=True,
-        num_parallel_reads=2,
-        ignore_errors=True,
-        num_epochs=1)
-    dataset = dataset.map(features_and_labels)
-    if mode == tf.estimator.ModeKeys.TRAIN:
-        dataset = dataset.shuffle(batch_size * 10)
-        dataset = dataset.repeat()
-    dataset = dataset.prefetch(1)
-    if truncate is not None:
-        dataset = dataset.take(truncate)
-    return dataset
 
 # load parameters
 
@@ -341,7 +312,7 @@ def set_experiment_parameters(experiment_number, count_no_delay, count_delay):
 
 def assign_container_env_variables():
     """
-    docstring
+    Copy the environment variables set in the container by the Vertex AI SDK
     """
     # The Vertex AI contract. If not running in Vertex AI Training, these will be None
     OUTPUT_MODEL_DIR = os.getenv("AIP_MODEL_DIR")  # or None
@@ -356,7 +327,8 @@ def assign_container_env_variables():
 def ingest_data(tracer_pattern,target_col):
     '''load list of valid routes and directions into dataframe
     Args:
-        path: path for data files
+        tracer_pattern: one of TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN
+        target_col: the target column
     
     Returns:
         merged_data: dataframe loaded from patterns
@@ -379,7 +351,6 @@ def ingest_data(tracer_pattern,target_col):
     logging.info(" merged_data shape: "+str(merged_data.shape))
     merged_data.columns = merged_data.columns.str.replace(' ', '_')
     merged_data.columns  = merged_data.columns.str.lower()
-    
     merged_data['target'] = np.where(merged_data[target_col] >= merged_data[target_col].median(), 1, 0 )
     return(merged_data)
 
@@ -389,9 +360,8 @@ def ingest_data(tracer_pattern,target_col):
 
 # control cell for ingesting data
 logging.info("ABOUT TO GET ENV VARIABLES")
+# load the environment variables set by the Vertex AI SDK
 OUTPUT_MODEL_DIR, TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN = assign_container_env_variables()
-#path = get_path()
-#logging.info("path is",path)
 # get dataframes for each slice of data
 target_col = target_col.lower()
 logging.info("target_col is: "+target_col)
@@ -399,8 +369,6 @@ train = ingest_data(TRAIN_DATA_PATTERN,target_col)
 val = ingest_data(EVAL_DATA_PATTERN,target_col)
 test = ingest_data(TEST_DATA_PATTERN,target_col)
 logging.info("ASSIGNED train val test")
-#merged_data = ingest_data(path)
-#merged_data = prep_merged_data(merged_data,target_col)
 # remove spaces from and lowercase column names (to avoid model saving issues)
 t_shape = train.shape
 logging.info("train shape "+str(t_shape))
@@ -422,7 +390,6 @@ logging.info("PAST count delay")
 # define parameters for the current experiment
 experiment_number = current_experiment
 early_stop, one_weight, epochs,es_monitor,es_mode = set_experiment_parameters(experiment_number, count_no_delay, count_delay)
-#logging.info("early_stop is "+config['general']['early_stop'])
 logging.info("one_weight is "+str(one_weight))
 logging.info("epochs is "+str(epochs))
 logging.info("es_monitor is "+str(es_monitor))
@@ -689,57 +656,12 @@ Now that the model has been trained, thanks to the Keras preprocessing layers, w
 We will [save and reload the Keras model](../keras/save_and_load.ipynb) with `Model.save` and `Model.load_model` before doing inference on new data:
 """
 
-#model_file_name = os.path.join(get_model_path(),config['file_names']['saved_model'])
-#model.save(model_file_name)
+# save the trained model to the location passed by the Vertex AI SDK
 tf.saved_model.save(model, OUTPUT_MODEL_DIR)
-#reloaded_model = tf.keras.models.load_model(model_file_name)
 
 logging.info("categorical columns: "+str(config['categorical']))
 logging.info("continuous columns: "+str(config['continuous']))
 
-"""Use the Keras `Model.predict` method to get predictions on a new data point. Use `tf.convert_to_tensor` on each feature to prepare it to be fed into the trained model to get a prediction."""
-'''
-sample = {
-    'location': 'Sentul, Kuala Lumpur',
-    'rooms': 3.0,
-    'property_type': 'Condominium For Sale',
-    'furnishing': 'Partly Furnished',
-    'size_type_bin': 'built-up 1',
-    'bathrooms': 2.0,
-    'car_parks': 0.0,
-    'size': 950.0,
-}
-
-input_dict = {name: tf.convert_to_tensor([value]) for name, value in sample.items()}
-input_dict
 
 
-sample = {
-    'location': 'Sentul, Kuala Lumpur',
-    'rooms': 3.0,
-    'property_type': 'Condominium For Sale',
-    'furnishing': 'Partly Furnished',
-    'size_type_bin': 'built-up 1',
-    'bathrooms': 2.0,
-    'car_parks': 0.0,
-    'size': 950.0,
-}
-
-input_dict = {name: tf.convert_to_tensor([value]) for name, value in sample.items()}
-#predictions = reloaded_model.predict(input_dict)
-prob = tf.nn.sigmoid(predictions[0])
-
-print(
-    "This property has a %.1f percent probability of "
-    "having a price over the median." % (100 * prob)
-)
-
-prob2 = tf.nn.sigmoid(-1.52191401)
-print(
-    "This property has a %.1f percent probability of "
-    "having a price over the median." % (100 * prob2)
-)
-'''
-
-# print elapsed time to run the notebook
 #logging.info("--- %s seconds ---" % (time.time() - start_time))

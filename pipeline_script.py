@@ -8,6 +8,7 @@ import argparse
 import yaml
 import os
 from datetime import datetime
+import time
 
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -88,6 +89,7 @@ def deploy_model(model,config):
     )
 
 if __name__ == '__main__':
+    start_time = time.time()
     # load pipeline config parameters
     config = get_pipeline_config('pipeline_config.yml')
     # all the arguments sent to the training script run in the container are sent via
@@ -102,5 +104,6 @@ if __name__ == '__main__':
     if config['deploy_model']:
         deploy_model(model,config)
     print("pipeline completed")
+    print("--- %s seconds ---" % (time.time() - start_time))
 
 
