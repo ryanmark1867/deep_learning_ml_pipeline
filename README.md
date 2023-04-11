@@ -1,6 +1,6 @@
 # ML pipeline for a Trained Deep Learning Model
 
-This repo contains the code for a simple Kubeflow ML pipeline for a trained deep learning model for the upcoming Manning book on machine learning with tabular data. This is part of the code for the end-to-end deep learning and MLOps chapter. This code is designed to be run from Cloud Shell in Google Cloud.
+This repo contains the code for an ML pipeline to train a deep learning model with a tabular dataset and deploy the trained model to a Vertex AI endpoint. This example is the core of a chapter for the upcoming Manning book on machine learning with tabular data.
 
 File descriptions 
 
