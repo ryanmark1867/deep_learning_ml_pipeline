@@ -1,4 +1,4 @@
-
+# config file for pipeline_script.py
 ENDPOINT_NAME : 'klrealestate'
 # from https://cloud.google.com/vertex-ai/docs/training/pre-built-containers
 train_image : "us-docker.pkg.dev/vertex-ai/training/tf-cpu.2-9:latest"

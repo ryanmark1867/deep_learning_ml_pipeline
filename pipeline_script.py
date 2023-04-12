@@ -1,4 +1,5 @@
-# script to drive training process for a Keras model trained on tabular data in Vertex AI
+# script to (a) drive training process for a Keras model trained on tabular data in Vertex AI, and
+# (b) deploy the resulting trained model to a Vertex AI endpoint
 # adapts ideas from https://github.com/GoogleCloudPlatform/data-science-on-gcp/blob/edition2/10_mlops/train_on_vertexai.py
 
 # imports
@@ -17,6 +18,13 @@ TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 def get_pipeline_config(path_to_yaml):
+    '''ingest the config yaml file
+    Args:
+        path_to_yaml: yaml file containing parameters for the pipeline script
+    
+    Returns:
+        config: dictionary containing parameters read from the config file
+    '''
     print("path_to_yaml "+path_to_yaml)
     try:
         with open (path_to_yaml, 'r') as c_file:
@@ -28,6 +36,13 @@ def get_pipeline_config(path_to_yaml):
 
 # define CustomTrainingJob object
 def create_job(config):
+    ''' create CustomTrainingJob object
+    Args:
+        config: dictionary containing parameters read from config file
+    
+    Returns:
+        job: CustomTrainingJob object
+    '''
     model_display_name = '{}-{}'.format(config['ENDPOINT_NAME'], TIMESTAMP)
     job = aiplatform.CustomTrainingJob(
             display_name='train-{}'.format(model_display_name),
@@ -37,12 +52,20 @@ def create_job(config):
             requirements=['gcsfs'],  # any extra Python packages
             model_serving_container_image_uri=config['deploy_image']
     ) 
-    # define dataset
     return job
 
 
 # run job to create dataset
 def run_job(job, ds, model_args,config):
+    ''' run CustomTrainingJob object, including specifying train/validation/test split of dataset
+    Args:
+        job: CustomTrainingJob object
+        ds: TabularDataSet object associated with managed dataset
+        config: dictionary containing parameters read from config file
+    
+    Returns:
+        model: trained Vertex AI model object
+    '''
     model_display_name = '{}-{}'.format(config['ENDPOINT_NAME'], TIMESTAMP)
     model = job.run(
         dataset=ds,
@@ -54,14 +77,16 @@ def run_job(job, ds, model_args,config):
         args=model_args,
     #    replica_count=1,
         machine_type= config['machine_type']
-        # See https://cloud.google.com/vertex-ai/docs/general/locations#accelerators
-    #    accelerator_type=aip.AcceleratorType.NVIDIA_TESLA_T4.name,
-    #    accelerator_count=1,
-    #    sync=develop_mode
     )
     return model
 
 def deploy_model(model,config):
+    ''' deploy model to a Vertex AI endpoint
+    Args:
+        model: Vertex AI model object
+        config: dictionary containing parameters read from config file
+    
+    '''
     endpoints = aiplatform.Endpoint.list(
         filter='display_name="{}"'.format(config['ENDPOINT_NAME']),
         order_by='create_time desc',
@@ -96,9 +121,11 @@ if __name__ == '__main__':
     # a yaml file in Cloud Storage whose URI is the single argument sent
     model_args = ['--config_bucket', config['config_bucket_path']]
     print("model_args: ",model_args)
+    # create a CustomTrainingJob object
     job = create_job(config)
     dataset_path = 'projects/'+config['project_id']+'/locations/'+config['region']+'/datasets/'+config['dataset_id']
     ds = aiplatform.TabularDataset(dataset_path)
+    # run the CustomTrainingJob object to get a trained model and deploy it to an endpoint
     model = run_job(job, ds, model_args,config)
     print("deployment starting")
     if config['deploy_model']:

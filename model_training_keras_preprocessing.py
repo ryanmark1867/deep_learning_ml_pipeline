@@ -136,10 +136,6 @@ targetthresh = config['general']['targetthresh']
 targetcontinuous = config['general']['targetcontinuous']
 target_col = config['general']['target_col']
 
-#time of day thresholds
-time_of_day = {'overnight':{'start':0,'end':5},'morning_rush':{'start':5,'end':10},
-              'midday':{'start':10,'end':15},'aft_rush':{'start':15,'end':19},'evening':{'start':19,'end':24}}
-
 
 
 emptythresh = config['general']['emptythresh']
@@ -196,7 +192,7 @@ def get_path():
     return(path)
 
 def get_pipeline_path():
-    '''get the path for data files
+    '''get the path for pipeline files
     
     Returns:
         path: path for pipeline files
@@ -207,7 +203,7 @@ def get_pipeline_path():
     return(path)
 
 def get_model_path():
-    '''get the path for data files
+    '''get the path for model files
     
     Returns:
         path: path for model files
@@ -314,7 +310,7 @@ def assign_container_env_variables():
     """
     Copy the environment variables set in the container by the Vertex AI SDK
     """
-    # The Vertex AI contract. If not running in Vertex AI Training, these will be None
+    # Copy values from environment variables
     OUTPUT_MODEL_DIR = os.getenv("AIP_MODEL_DIR")  # or None
     TRAIN_DATA_PATTERN = os.getenv("AIP_TRAINING_DATA_URI")
     EVAL_DATA_PATTERN = os.getenv("AIP_VALIDATION_DATA_URI")
@@ -337,20 +333,23 @@ def ingest_data(tracer_pattern,target_col):
     logging.info("target_col is: "+str(target_col))
 
     # use the pattern to find all the bucket files and create a df from it
+    # parse the URI into the bucket name and blob pattern
     bucket_pattern = tracer_pattern.split("/")[2]
     pattern = "/".join(tracer_pattern.split("/")[3:])
     pattern_client = storage.Client()
     bucket = pattern_client.get_bucket(bucket_pattern)
     # get all the blobs in the bucket
     blobs = bucket.list_blobs()
-    # get the URIs for all the matching files
+    # get the URIs for all the blobs (files) that match the pattern
     matching_files = [f"gs://{bucket_pattern}/{blob.name}" for blob in blobs if fnmatch.fnmatch(blob.name, pattern)]
     logging.info("matching_files is: "+str(matching_files))
     # build a dataframe from all the matching files
     merged_data = pd.concat([pd.read_csv(f) for f in matching_files], ignore_index=True)
     logging.info(" merged_data shape: "+str(merged_data.shape))
+    # remove spaces from and lowercase column names (to avoid model saving issues)
     merged_data.columns = merged_data.columns.str.replace(' ', '_')
     merged_data.columns  = merged_data.columns.str.lower()
+    # set the target column in the dataframe
     merged_data['target'] = np.where(merged_data[target_col] >= merged_data[target_col].median(), 1, 0 )
     return(merged_data)
 
@@ -362,14 +361,14 @@ def ingest_data(tracer_pattern,target_col):
 logging.info("ABOUT TO GET ENV VARIABLES")
 # load the environment variables set by the Vertex AI SDK
 OUTPUT_MODEL_DIR, TRAIN_DATA_PATTERN, EVAL_DATA_PATTERN, TEST_DATA_PATTERN = assign_container_env_variables()
-# get dataframes for each slice of data
+# get dataframes for each subset of the dataset
 target_col = target_col.lower()
 logging.info("target_col is: "+target_col)
 train = ingest_data(TRAIN_DATA_PATTERN,target_col)
 val = ingest_data(EVAL_DATA_PATTERN,target_col)
 test = ingest_data(TEST_DATA_PATTERN,target_col)
 logging.info("ASSIGNED train val test")
-# remove spaces from and lowercase column names (to avoid model saving issues)
+
 t_shape = train.shape
 logging.info("train shape "+str(t_shape))
 logging.info("PAST train shape")
@@ -379,6 +378,7 @@ logging.info("PAST val shape")
 te_shape = test.shape
 logging.info("test shape "+str(te_shape))
 logging.info("PAST test shape")
+# update column name lists to match updates made to column names in dataset
 config['categorical'] = [x.replace(" ", "_") for x in config['categorical']]
 config['continuous'] = [x.replace(" ", "_") for x in config['continuous']]
 config['categorical'] = [x.lower() for x in config['categorical']]
@@ -542,6 +542,7 @@ Next, apply the preprocessing utility functions to the continuous and categorica
 The columns that are used to train the model are specified in the config file model_training_config.yml, ingested as `config['continuous']`, the list of continuous columns, and `config['categorical']`, the list of categorical columns.
 """
 
+# transform the dataframe for each dataset subset into a tf dataset
 train_ds = df_to_dataset(train, batch_size=batch_size)
 val_ds = df_to_dataset(val, shuffle=False, batch_size=batch_size)
 test_ds = df_to_dataset(test, shuffle=False, batch_size=batch_size)
