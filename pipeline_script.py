@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 import time
 
-
+# initialize time counter
 TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
 
 
@@ -75,7 +75,6 @@ def run_job(job, ds, model_args,config):
         test_fraction_split = config['test_fraction_split'],
         model_display_name=model_display_name,
         args=model_args,
-    #    replica_count=1,
         machine_type= config['machine_type']
     )
     return model
@@ -100,17 +99,15 @@ def deploy_model(model,config):
             display_name=config['ENDPOINT_NAME'], 
             project=config['project_id'], 
             location=config['region']
- #           sync=DEVELOP_MODE
         )
 
-    # deploy
+    # deploy model to a Vertex AI endpoint
     model.deploy(
         endpoint=endpoint,
         traffic_split={"0": 100},
         machine_type=config['machine_type_deploy'],
         min_replica_count=1,
         max_replica_count=1,
-#        sync=DEVELOP_MODE
     )
 
 if __name__ == '__main__':
@@ -123,14 +120,17 @@ if __name__ == '__main__':
     print("model_args: ",model_args)
     # create a CustomTrainingJob object
     job = create_job(config)
+    # define TabularDataset object to use in running CustomTrainingJob
     dataset_path = 'projects/'+config['project_id']+'/locations/'+config['region']+'/datasets/'+config['dataset_id']
     ds = aiplatform.TabularDataset(dataset_path)
-    # run the CustomTrainingJob object to get a trained model and deploy it to an endpoint
+    # run the CustomTrainingJob object to get a trained model
     model = run_job(job, ds, model_args,config)
     print("deployment starting")
+    # deploy model to a Vertex AI endpoint
     if config['deploy_model']:
         deploy_model(model,config)
     print("pipeline completed")
+    # show time taken by script
     print("--- %s seconds ---" % (time.time() - start_time))
 
 
