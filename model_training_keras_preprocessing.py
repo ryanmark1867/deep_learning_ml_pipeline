@@ -29,15 +29,15 @@ import pandas as pd
 import pickle
 from pickle import dump
 from pickle import load
-from sklearn.base import BaseEstimator
-from sklearn.base import TransformerMixin
+#from sklearn.base import BaseEstimator
+#from sklearn.base import TransformerMixin
 # DSX code to import uploaded documents
 from io import StringIO
 import requests
 import json
 #from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 ### remove this include in container version
-from sklearn.model_selection import train_test_split
+#from sklearn.model_selection import train_test_split
 ##import matplotlib.pyplot as plt
 # %matplotlib inline
 import os
@@ -402,24 +402,9 @@ logging.info("es_mode is "+str(es_mode))
 
 """
 
-def get_train_validation_test(dataset):
-    '''get training and test data set
-    Args:
-        dataset: input dataframe
-    
-    Returns:
-        dtrain: training subset of dataset
-        dvalid: validation subset of dataset
-        dtest: test subset of dataset
-    '''
-    non_test, test = train_test_split(dataset, test_size = testproportion)
-    train, val = train_test_split(non_test, random_state=123, train_size=trainproportion)
-    print("Through train test split. Test proportion:")
-    print(testproportion)
-    return(train,val,test)
 
-#train, val, test = np.split(dataframe.sample(frac=1), [int(0.8*len(dataframe)), int(0.9*len(dataframe))])
-#train, val, test = get_train_validation_test(dataframe)
+
+
 
 logging.info(str(len(train))+'training examples')
 logging.info(str(len(val))+'validation examples')
@@ -443,7 +428,7 @@ def df_to_dataset(dataframe, shuffle=True, batch_size=32):
 
 """Use `df_to_dataset` to check the format of the data the input pipeline helper function returns by calling it on the training data, and use a small batch size to keep the output readable:"""
 
-#train,val,test = get_train_validation_test(merged_data)
+
 train_ds = df_to_dataset(train, batch_size=batch_size)
 
 [(train_features, label_batch)] = train_ds.take(1)
